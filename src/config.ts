@@ -3,7 +3,7 @@ import { join } from 'path'
 import { fsWriteFileSync } from './util/fsWriteFile'
 import { readFileSync } from 'fs'
 import { ELoggerMode } from './logger'
-import { type TPrompt, PromptConvFromString } from 'vv-ai-prompt-format'
+import { type TPrompt, PromptConvFromString, defVal, defValJson, PromptConvToString } from 'vv-ai-prompt-format'
 import type { TResult } from './tresult'
 import { fsReadFileSync } from './util/fsReadFile'
 
@@ -115,5 +115,49 @@ export function promptTemplateRead(
 		return { ok: true, result: { jsonPipe: hasJsonY, list: res } }
 	} else {
 		return { ok: true, result: { jsonPipe: false, list: res } }
+	}
+}
+
+export function promptTemplateGerenate(fullPath: string, isJson: boolean): { error?: string; success?: string } {
+	const fullFileName = join(fullPath, `mentator-ll-prompter.prompt.TEMPLATE.txt`)
+	try {
+		const prompt: TPrompt = {
+			llm: {
+				model: 'file-model-name.gguf'
+			},
+			system: 'Read the story and answer the question',
+			user: [
+				'Get all people (name, age, etc.) from this text:',
+				'I am Bob, I am 9 years old and I live on Sunny Street.',
+				'My friend Diana lives across from me, she is 8 years old and does gymnastics.',
+				'A little further away lives my friend John, he is a year older than me. We like to play tennis with him.',
+				'We ask Mr. Smith to judge our game. He is a former tennis referee. And although he is already 92 years old, he still loves his former job and is happy to help us.',
+			].join('\n'),
+			options: isJson ? defValJson : defVal,
+			jsonresponse: isJson ? [
+				`{`,
+				`	"type": "array",`,
+				`	"items": {`,
+				`		"type": "object",`,
+				`		"properties": {`,
+				`			"name": { "type": "string" },`,
+				`			"age": { "type": "integer" },`,
+				`			"sex": { "type": "string", "enum": [ "male", "female" ] },`,
+				`			"hobby": { "type": "string" }`,
+				`		},`,
+				`		"required": [ "name", "age", "sex" ]`,
+				`	}`,
+				`}`
+			].join('\n') : undefined,
+			segment: isJson ? { 'mentator-llm-service': '{"useGrammar":true}' } : undefined,
+		}
+
+		const resWrite = fsWriteFileSync(fullFileName, PromptConvToString([prompt]))
+		if (!resWrite.ok) {
+			return { error: `on create default prompt: ${resWrite.error}` }
+		}
+		return { success: `prompt create "${fullFileName}"` }
+	} catch (err) {
+		return { error: `on create default prompt: ${err}` }
 	}
 }

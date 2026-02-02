@@ -12,6 +12,10 @@ import { isEmptyObj } from './util/isEmptyObj'
 
 export async function Go(config: TConfig): Promise<void> {
 	let getLogger: { error?: string; logger?: Logger } = { error: undefined, logger: undefined }
+	let filesProcess = 0
+	let filesSuccess = 0
+	let filesSkipped = 0
+	let filesError = 0
 	try {
 		getLogger = GetLogger('mentator-llm-prompter', config.log.dir, config.log.mode)
 		if (getLogger.error) {
@@ -34,15 +38,20 @@ export async function Go(config: TConfig): Promise<void> {
 			return
 		}
 		let printPromptMode = false
+		const filesTotal = payloadReadDirRes.result.length
 
 		for (const payloadFileName of payloadReadDirRes.result) {
+			filesProcess++
+			const percent = Math.floor((filesProcess / filesTotal) * 100).toString().padStart(2, '0')
 			const payloadRes = fsReadFileSync(join(config.prompt.dir, payloadFileName))
 			if (!payloadRes.ok) {
 				logger.error(`on read text from payload file: ${payloadRes.error}`)
+				filesError++
 				continue
 			}
 			if (!payloadRes.result) {
 				logger.error(`empty data, skip payload file "${payloadFileName}"`)
+				filesError++
 				continue
 			}
 			const hash = gethash(payloadRes.result)
@@ -50,10 +59,12 @@ export async function Go(config: TConfig): Promise<void> {
 				const readCurrentHashRes = fsReadFileSync(join(config.answer.hashDir, `${payloadFileName}.hash`))
 				if (!readCurrentHashRes.ok) {
 					logger.error(`on read current hash: ${readCurrentHashRes.error}`)
+					filesError++
 					continue
 				}
 				if (hash === readCurrentHashRes.result) {
-					logger.debug(`hash not changed, ignore "${payloadFileName}"`)
+					logger.debug(`(${percent}%) hash not changed, ignore "${payloadFileName}"`)
+					filesSkipped++
 					continue
 				}
 			}
@@ -66,7 +77,10 @@ export async function Go(config: TConfig): Promise<void> {
 				let hasError = false
 				const uniqIdxFile = Array.from(new Set(promptTemplateReadRes.result.list.map(m => m.idxFile)))
 				for (const idxFile of uniqIdxFile) {
-					for (const templateItem of promptTemplateReadRes.result.list.filter(f => f.idxFile === idxFile)) {
+					const templatesForFile = promptTemplateReadRes.result.list.filter(f => f.idxFile === idxFile)
+				let foundNonEmpty = false
+
+				for (const templateItem of templatesForFile) {
 						const prompt = {
 							...templateItem.prompt,
 							system: dualReplace(
@@ -95,19 +109,37 @@ export async function Go(config: TConfig): Promise<void> {
 						}
 
 						if (!isEmptyObj(resultJson)) {
+							foundNonEmpty = true
 							break
 						}
 					}
+
 					if (hasError) break
+
+					// Если это первый вопрос и результат пустой - сохраняем пустой результат и останавливаемся
+					if (idxFile === uniqIdxFile[0] && !foundNonEmpty) {
+						break
+					}
+
+					// Если это последующие вопросы и результат пустой - это ошибка
+					if (idxFile !== uniqIdxFile[0] && !foundNonEmpty) {
+						logger.error(`empty result for question (idxFile=${idxFile}) in "${payloadFileName}"`)
+						hasError = true
+						break
+					}
 				}
 
 				const writeAnswerRes = fsWriteFileSync(join(config.answer.dir, payloadFileName), JSON.stringify(resultJson, null, 4))
 				if (!writeAnswerRes.ok) {
 					logger.error(`on save answer for "${payloadFileName}": ${writeAnswerRes.error}`)
+					filesError++
 					continue
 				}
 				if (!hasError) {
-					logger.debug(`answer saved for "${payloadFileName}"`)
+					logger.debug(`(${percent}%) answer saved for "${payloadFileName}"`)
+					filesSuccess++
+				} else {
+					filesError++
 				}
 			} else if (promptTemplateReadRes.result.list.length > 0) {
 				if (!printPromptMode) {
@@ -118,14 +150,14 @@ export async function Go(config: TConfig): Promise<void> {
 				for (const templateItem of promptTemplateReadRes.result.list) {
 					const prompt = {
 						...templateItem.prompt,
-						system:
-							templateItem.prompt.system && config.prompt.templateReplacePayload
-								? templateItem.prompt.system.replaceAll(config.prompt.templateReplacePayload, payloadRes.result)
-								: templateItem.prompt.system,
-						user:
-							templateItem.prompt.user && config.prompt.templateReplacePayload
-								? templateItem.prompt.user.replaceAll(config.prompt.templateReplacePayload, payloadRes.result)
-								: templateItem.prompt.user,
+						system: dualReplace(
+							templateItem.prompt.system,
+							{ find: config.prompt.templateReplacePayload, replace: payloadRes.result },
+						),
+						user: dualReplace(
+							templateItem.prompt.user,
+							{ find: config.prompt.templateReplacePayload, replace: payloadRes.result },
+						) || '',
 					}
 					const aiRes = await Ai(config.ai, prompt)
 					if (!aiRes.ok) {
@@ -150,7 +182,10 @@ export async function Go(config: TConfig): Promise<void> {
 					}
 				}
 				if (!hasError) {
-					logger.debug(`answer(s) saved for "${payloadFileName}"`)
+					logger.debug(`(${percent}%) answer(s) saved for "${payloadFileName}"`)
+					filesSuccess++
+				} else {
+					filesError++
 				}
 			} else {
 				if (!printPromptMode) {
@@ -164,14 +199,17 @@ export async function Go(config: TConfig): Promise<void> {
 				const aiRes = await Ai(config.ai, prompt)
 				if (!aiRes.ok) {
 					logger.error(`on get answer for "${payloadFileName}": ${aiRes.error}`)
+					filesError++
 					continue
 				}
 				const writeAnswerRes = fsWriteFileSync(join(config.answer.dir, payloadFileName), aiRes.result)
 				if (!writeAnswerRes.ok) {
 					logger.error(`on save answer for "${payloadFileName}": ${writeAnswerRes.error}`)
+					filesError++
 					continue
 				}
-				logger.debug(`answer saved for "${payloadFileName}"`)
+				logger.debug(`(${percent}%) answer saved for "${payloadFileName}"`)
+				filesSuccess++
 			}
 
 			if (config.answer.hashDir) {
@@ -189,6 +227,7 @@ export async function Go(config: TConfig): Promise<void> {
 		}
 	} finally {
 		if (getLogger.logger) {
+			getLogger.logger.debug(`FILES STATISTICS: total=${filesProcess}, success=${filesSuccess}, skipped=${filesSkipped}, error=${filesError}`)
 			getLogger.logger.debug('APP STOP')
 			getLogger.logger.close(() => {
 				process.exit()
