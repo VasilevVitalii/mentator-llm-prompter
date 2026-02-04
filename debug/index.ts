@@ -27,7 +27,7 @@ Go({
 	ai: {
 		kind: 'mentator',
 		//url: 'http://localhost:11434',
-		model: 'qwen2.5-0.5b-instruct-q5_k_m',
+		model: 'Qwen2.5-Coder-7B-Instruct-Q5_K_M.gguf',
 		url: 'http://127.0.0.1:19777',
 		//model: 'deepseek-coder:6.7b',
 		//model: 'qwen2.5-0.5b-instruct-q5_k_m.gguf',

@@ -85,9 +85,9 @@ export function ConfigRead(fullFileName: string): { error?: string; conf?: TConf
 	}
 }
 
-export function promptTemplateRead(
-	config: TConfig,
-): TResult<{ jsonPipe: boolean; list: { idxFile: number; idxInFile: number; prompt: TPrompt }[] }> {
+export type TPromptTemplateRead = { jsonPipe: boolean; list: { idxFile: number; idxInFile: number; prompt: TPrompt }[] }
+
+export function promptTemplateRead(config: TConfig): TResult<TPromptTemplateRead> {
 	const res = [] as { idxFile: number; idxInFile: number; prompt: TPrompt }[]
 	let idxFile = 0
 	for (const fileName of config.prompt.templateFile || []) {
@@ -123,7 +123,7 @@ export function promptTemplateGerenate(fullPath: string, isJson: boolean): { err
 	try {
 		const prompt: TPrompt = {
 			llm: {
-				model: 'file-model-name.gguf'
+				model: 'file-model-name.gguf',
 			},
 			system: 'Read the story and answer the question',
 			user: [
@@ -134,21 +134,23 @@ export function promptTemplateGerenate(fullPath: string, isJson: boolean): { err
 				'We ask Mr. Smith to judge our game. He is a former tennis referee. And although he is already 92 years old, he still loves his former job and is happy to help us.',
 			].join('\n'),
 			options: isJson ? defValJson : defVal,
-			jsonresponse: isJson ? [
-				`{`,
-				`	"type": "array",`,
-				`	"items": {`,
-				`		"type": "object",`,
-				`		"properties": {`,
-				`			"name": { "type": "string" },`,
-				`			"age": { "type": "integer" },`,
-				`			"sex": { "type": "string", "enum": [ "male", "female" ] },`,
-				`			"hobby": { "type": "string" }`,
-				`		},`,
-				`		"required": [ "name", "age", "sex" ]`,
-				`	}`,
-				`}`
-			].join('\n') : undefined,
+			jsonresponse: isJson
+				? [
+						`{`,
+						`	"type": "array",`,
+						`	"items": {`,
+						`		"type": "object",`,
+						`		"properties": {`,
+						`			"name": { "type": "string" },`,
+						`			"age": { "type": "integer" },`,
+						`			"sex": { "type": "string", "enum": [ "male", "female" ] },`,
+						`			"hobby": { "type": "string" }`,
+						`		},`,
+						`		"required": [ "name", "age", "sex" ]`,
+						`	}`,
+						`}`,
+					].join('\n')
+				: undefined,
 			segment: isJson ? { 'mentator-llm-service': '{"useGrammar":true}' } : undefined,
 		}
 
