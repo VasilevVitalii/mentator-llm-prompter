@@ -21,6 +21,7 @@ A powerful CLI utility for batch processing prompts through various AI providers
 - **Structured Output**: Support for JSON schema-based responses with grammar enforcement
 - **Progress Tracking**: Real-time progress indicators and comprehensive statistics
 - **JSONC Configuration**: Human-friendly configuration format with comments support
+- **Response Conversion**: Optional JavaScript function in templates to transform or validate AI responses
 
 ## Installation
 
@@ -308,6 +309,44 @@ jsonresponse:
 | **Structured Output** | Optional | Optional | Required |
 | **Variants Support** | No | No | Yes (within one template) |
 | **Empty Result Handling** | Error | Error | First: OK, Others: Error |
+
+## Response Conversion (`$$segment=convert`)
+
+Templates support an optional `$$segment=convert` section that allows you to transform or validate AI responses using custom JavaScript code.
+
+The section body is treated as a JavaScript function body with one parameter `raw` (the AI response string). The function must return a string — the transformed response that will be saved as the answer.
+
+If the function throws an error, the response is treated as invalid and the file processing fails with an error.
+
+**Example — strip markdown code fences from response:**
+```
+$$begin
+$$system
+You are a helpful assistant
+$$user
+Generate JSON for: {{payload}}
+$$segment=convert
+return raw.replace(/^```[\s\S]*?\n/, '').replace(/\n```\s*$/, '')
+$$end
+```
+
+**Example — validate response length:**
+```
+$$begin
+$$user
+Summarize: {{payload}}
+$$segment=convert
+if (raw.length < 10) throw new Error('response too short')
+return raw.trim()
+$$end
+```
+
+**Rules:**
+- The section is optional — if absent, the response is saved as-is
+- Input parameter: `raw` (string) — the raw AI response
+- Must return a string — the transformed response
+- If the function throws — the response is treated as an error
+- Works in all modes that use templates (Template and JSON Pipeline)
 
 ## AI Provider Configuration
 

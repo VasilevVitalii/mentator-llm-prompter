@@ -12,6 +12,7 @@ import { isEmptyObj } from './util/isEmptyObj'
 import { goModeBasic } from './goModeBasic'
 import { goModeTemplate } from './goModeTemplate'
 import { goModeJsonPipe } from './goModeJsonPipe'
+import { fsDeleteFileSync } from './util/fsDeleteFile'
 
 export async function Go(config: TConfig): Promise<void> {
 	let getLogger: { error?: string; logger?: Logger } = { error: undefined, logger: undefined }
@@ -65,7 +66,8 @@ export async function Go(config: TConfig): Promise<void> {
 
 			const hash = gethash(payloadRes.result)
 			if (config.answer.hashDir) {
-				const readCurrentHashRes = fsReadFileSync(join(config.answer.hashDir, `${payloadFileName}.hash`))
+				const hashFileName = join(config.answer.hashDir, `${payloadFileName}.hash`)
+				const readCurrentHashRes = fsReadFileSync(hashFileName)
 				if (!readCurrentHashRes.ok) {
 					logger.error(`on read current hash: ${readCurrentHashRes.error}`)
 					filesError++
@@ -75,6 +77,8 @@ export async function Go(config: TConfig): Promise<void> {
 					logger.debug(`(${percent}%) hash not changed, ignore "${payloadFileName}"`)
 					filesSkipped++
 					continue
+				} else {
+					fsDeleteFileSync(hashFileName)
 				}
 			}
 
