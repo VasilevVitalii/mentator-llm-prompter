@@ -15,7 +15,7 @@ export async function goModeJsonPipe(config: TConfig, payloadText: string, promp
 			const templateRes = await goPromptTemplate(
 				config,
 				payloadText,
-				JSON.stringify(resultJson),
+				JSON.stringify(resultJson, null, 4),
 				promptTemplate.list.filter(f => f.idxFile === idxFile),
 			)
 			if (!templateRes.ok) {
