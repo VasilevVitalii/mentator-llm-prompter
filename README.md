@@ -192,8 +192,7 @@ options:
 - Multiple prompts in one template file = variants of the same question (tries until non-empty result)
 - Different template files = sequential questions in the pipeline
 - Accumulates and enriches the result progressively
-- **Special rule**: If first question returns empty result - saves empty and stops (success)
-- **Special rule**: If subsequent questions return empty result - error
+- If all variants return empty result - saves empty and continues to next step
 
 **Example Use Case**:
 ```
@@ -308,7 +307,7 @@ jsonresponse:
 | **Chaining** | No | No | Yes ({{json}}) |
 | **Structured Output** | Optional | Optional | Required |
 | **Variants Support** | No | No | Yes (within one template) |
-| **Empty Result Handling** | Error | Error | First: OK, Others: Error |
+| **Empty Result Handling** | Error | Error | OK (saves empty, continues) |
 
 ## Response Conversion (`$$segment=convert`)
 
@@ -484,8 +483,7 @@ Extract and enrich data from unstructured text:
 - Don't mix templates with/without JSON response
 
 ### Empty results in JSON Pipeline
-- First question returning empty: This is normal, result saved as success
-- Subsequent questions empty: Check error logs, this indicates a problem
+- Empty result from a step is normal — it is saved and processing continues to the next step
 - Try using variant questions (multiple prompts in one template)
 
 ### Performance issues

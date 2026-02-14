@@ -85,7 +85,8 @@ export function ConfigRead(fullFileName: string): { error?: string; conf?: TConf
 	}
 }
 
-export type TPromptTemplateRead = { jsonPipe: boolean; list: { idxFile: number; idxInFile: number; prompt: TPrompt }[] }
+export type TPromptTemplateReadItem = { idxFile: number; idxInFile: number; prompt: TPrompt }
+export type TPromptTemplateRead = { jsonPipe: boolean; list: TPromptTemplateReadItem[] }
 
 export function promptTemplateRead(config: TConfig): TResult<TPromptTemplateRead> {
 	const res = [] as { idxFile: number; idxInFile: number; prompt: TPrompt }[]
