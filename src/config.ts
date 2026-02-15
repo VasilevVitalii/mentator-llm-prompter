@@ -35,6 +35,9 @@ export const SConfig = Type.Object({
 			description: 'REWRITE - write log to "mentator-llm-prompter.log"; APPEND - write log to "mentator-llm-prompter.YYYYMMDD-HHMMSS.log"',
 			default: 'REWRITE',
 		}),
+		debug: Type.Optional(Type.Object({
+			hashNotChange: Type.Boolean({description: 'print in debug info about ignored by hash file', default: true})
+		}))
 	}),
 	ai: SConfigAi,
 	prompt: Type.Object({

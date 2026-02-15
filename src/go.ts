@@ -74,7 +74,9 @@ export async function Go(config: TConfig): Promise<void> {
 					continue
 				}
 				if (hash === readCurrentHashRes.result) {
-					logger.debug(`(${percent}%) hash not changed, ignore "${payloadFileName}"`)
+					if (config.log.debug?.hashNotChange) {
+						logger.debug(`(${percent}%) hash not changed, ignore "${payloadFileName}"`)
+					}
 					filesSkipped++
 					continue
 				} else {
