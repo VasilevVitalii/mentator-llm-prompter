@@ -309,13 +309,19 @@ jsonresponse:
 | **Variants Support** | No | No | Yes (within one template) |
 | **Empty Result Handling** | Error | Error | OK (saves empty, continues) |
 
-## Response Conversion (`$$segment=convert`)
+## Response Conversion (`$$segment=convert`, `$$segment=convert_shared`)
 
-Templates support an optional `$$segment=convert` section that allows you to transform or validate AI responses using custom JavaScript code.
+Templates support optional segments for transforming or validating AI responses using custom JavaScript code.
 
-The section body is treated as a JavaScript function body with one parameter `raw` (the AI response string). The function must return a string — the transformed response that will be saved as the answer.
+Each segment body is treated as a JavaScript function body with one parameter `env` — an object with the following fields:
+- `env.answerString` (string) — the AI response (or result of previous conversion)
+- `env.originPayloadString` (string) — the original input file content
 
-If the function throws an error, the response is treated as invalid and the file processing fails with an error.
+The function must return a string — the transformed response. If the function throws an error, the response is treated as invalid.
+
+### `$$segment=convert`
+
+Per-step conversion applied only to the current prompt's response. Works in both Template and JSON Pipeline modes.
 
 **Example — strip markdown code fences from response:**
 ```
@@ -325,7 +331,7 @@ You are a helpful assistant
 $$user
 Generate JSON for: {{payload}}
 $$segment=convert
-return raw.replace(/^```[\s\S]*?\n/, '').replace(/\n```\s*$/, '')
+return env.answerString.replace(/^```[\s\S]*?\n/, '').replace(/\n```\s*$/, '')
 $$end
 ```
 
@@ -335,17 +341,43 @@ $$begin
 $$user
 Summarize: {{payload}}
 $$segment=convert
-if (raw.length < 10) throw new Error('response too short')
-return raw.trim()
+if (env.answerString.length < 10) throw new Error('response too short')
+return env.answerString.trim()
+$$end
+```
+
+### `$$segment=convert_shared`
+
+Cumulative conversion for JSON Pipeline mode only. Unlike `convert`, shared conversions accumulate across pipeline steps — each subsequent step's response is first passed through all `convert_shared` functions from previous steps, then through its own `convert_shared`, and finally through its own `convert`.
+
+**Processing order for each step in JSON Pipeline:**
+1. AI response received
+2. All `convert_shared` from previous steps applied sequentially
+3. Current step's `convert_shared` applied
+4. Current step's `convert` applied
+5. Result parsed as JSON
+
+**Example — ensure consistent format across pipeline steps:**
+```
+$$begin
+$$user
+Extract data: {{payload}}
+$$segment=convert_shared
+const parsed = JSON.parse(env.answerString)
+if (!Array.isArray(parsed)) throw new Error('expected array')
+return env.answerString
+$$jsonresponse
+{"type": "array", "items": {"type": "object"}}
 $$end
 ```
 
 **Rules:**
-- The section is optional — if absent, the response is saved as-is
-- Input parameter: `raw` (string) — the raw AI response
+- Both sections are optional — if absent, the response is saved as-is
+- Input parameter: `env` (object) with `env.answerString` and `env.originPayloadString`
 - Must return a string — the transformed response
 - If the function throws — the response is treated as an error
-- Works in all modes that use templates (Template and JSON Pipeline)
+- `convert` works in Template and JSON Pipeline modes
+- `convert_shared` works only in JSON Pipeline mode and accumulates across steps
 
 ## AI Provider Configuration
 

@@ -309,13 +309,19 @@ jsonresponse:
 | **Поддержка вариантов** | Нет | Нет | Да (в одном шаблоне) |
 | **Обработка пустого результата** | Ошибка | Ошибка | ОК (сохраняет пустой, продолжает) |
 
-## Конвертация ответов (`$$segment=convert`)
+## Конвертация ответов (`$$segment=convert`, `$$segment=convert_shared`)
 
-Шаблоны поддерживают опциональную секцию `$$segment=convert`, которая позволяет трансформировать или валидировать ответы AI с помощью произвольного JavaScript-кода.
+Шаблоны поддерживают опциональные сегменты для трансформации или валидации ответов AI с помощью произвольного JavaScript-кода.
 
-Содержимое секции трактуется как тело JavaScript-функции с одним параметром `raw` (строка — ответ AI). Функция должна вернуть строку — преобразованный ответ, который будет сохранен как результат.
+Содержимое сегмента трактуется как тело JavaScript-функции с одним параметром `env` — объектом с полями:
+- `env.answerString` (string) — ответ AI (или результат предыдущей конвертации)
+- `env.originPayloadString` (string) — исходное содержимое входного файла
 
-Если функция выбрасывает ошибку, ответ считается невалидным и обработка файла завершается с ошибкой.
+Функция должна вернуть строку — преобразованный ответ. Если функция выбрасывает ошибку, ответ считается невалидным.
+
+### `$$segment=convert`
+
+Конвертация, применяемая только к ответу текущего промпта. Работает в режимах Template и JSON Pipeline.
 
 **Пример — убрать markdown-обрамление кода из ответа:**
 ```
@@ -325,7 +331,7 @@ You are a helpful assistant
 $$user
 Generate JSON for: {{payload}}
 $$segment=convert
-return raw.replace(/^```[\s\S]*?\n/, '').replace(/\n```\s*$/, '')
+return env.answerString.replace(/^```[\s\S]*?\n/, '').replace(/\n```\s*$/, '')
 $$end
 ```
 
@@ -335,17 +341,43 @@ $$begin
 $$user
 Summarize: {{payload}}
 $$segment=convert
-if (raw.length < 10) throw new Error('response too short')
-return raw.trim()
+if (env.answerString.length < 10) throw new Error('response too short')
+return env.answerString.trim()
+$$end
+```
+
+### `$$segment=convert_shared`
+
+Накопительная конвертация только для режима JSON Pipeline. В отличие от `convert`, shared-конвертации накапливаются между шагами пайплайна — ответ каждого последующего шага сначала проходит через все `convert_shared` предыдущих шагов, затем через собственный `convert_shared`, и наконец через собственный `convert`.
+
+**Порядок обработки на каждом шаге JSON Pipeline:**
+1. Получен ответ AI
+2. Последовательно применяются все `convert_shared` от предыдущих шагов
+3. Применяется `convert_shared` текущего шага
+4. Применяется `convert` текущего шага
+5. Результат парсится как JSON
+
+**Пример — обеспечить единый формат на всех шагах пайплайна:**
+```
+$$begin
+$$user
+Extract data: {{payload}}
+$$segment=convert_shared
+const parsed = JSON.parse(env.answerString)
+if (!Array.isArray(parsed)) throw new Error('expected array')
+return env.answerString
+$$jsonresponse
+{"type": "array", "items": {"type": "object"}}
 $$end
 ```
 
 **Правила:**
-- Секция опциональна — если отсутствует, ответ сохраняется как есть
-- Входной параметр: `raw` (string) — сырой ответ AI
+- Обе секции опциональны — если отсутствуют, ответ сохраняется как есть
+- Входной параметр: `env` (объект) с полями `env.answerString` и `env.originPayloadString`
 - Должна вернуть строку — трансформированный ответ
 - Если функция выбросила ошибку — ответ считается ошибочным
-- Работает во всех режимах, использующих шаблоны (Template и JSON Pipeline)
+- `convert` работает в режимах Template и JSON Pipeline
+- `convert_shared` работает только в режиме JSON Pipeline и накапливается между шагами
 
 ## Конфигурация AI-провайдеров
 

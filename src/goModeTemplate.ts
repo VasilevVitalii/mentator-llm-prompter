@@ -24,7 +24,7 @@ export async function goModeTemplate(config: TConfig, payloadText: string, promp
                 return { ok: false, error: `on get answer: ${aiRes.error}` }
             }
 
-            const convertRes = convertAnswer(aiRes.result, templateItem.prompt.segment?.['convert'])
+            const convertRes = convertAnswer(templateItem.prompt.segment?.['convert'], {answerString: aiRes.result, originPayloadString: payloadText})
             if (!convertRes.ok) {
                 return { ok: false, error: convertRes.error }
             }
