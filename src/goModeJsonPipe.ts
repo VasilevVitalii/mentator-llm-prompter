@@ -5,6 +5,7 @@ import { Ai } from './ai'
 import { dualReplace } from './util/dualReplace'
 import { isEmptyObj } from './util/isEmptyObj'
 import { convertAnswer } from './util/segmentConvertAnswer'
+import { preparePrompt } from './util/segmentPreparePrompt'
 
 export async function goModeJsonPipe(config: TConfig, payloadText: string, promptTemplate: TPromptTemplateRead): Promise<TResult<string>> {
 	try {
@@ -49,7 +50,7 @@ async function goPromptTemplate(
 	for (const templateItem of promptTemplateList) {
 		const errPrefix = `template [file #${templateItem.idxFile}; prompt #${templateItem.idxInFile}]: `
 
-		const prompt = {
+			const promptAfterReplace = {
 			...templateItem.prompt,
 			system: dualReplace(
 				templateItem.prompt.system,
@@ -63,6 +64,15 @@ async function goPromptTemplate(
 					{ find: config.prompt.templateReplaceJson, replace: prevResult },
 				) || '',
 		}
+		const prepareRes = preparePrompt(
+			templateItem.prompt.segment?.['prepare'],
+			{ system: promptAfterReplace.system, user: promptAfterReplace.user }
+		)
+		if (!prepareRes.ok) {
+			lastError = `${errPrefix}on prepare promt: ${prepareRes.error}`
+			continue
+		}
+		const prompt = { ...promptAfterReplace, ...prepareRes.result }
 		const aiRes = await Ai(config.ai, prompt)
 		if (!aiRes.ok) {
 			lastError = `${errPrefix}on get answer: ${aiRes.error}`

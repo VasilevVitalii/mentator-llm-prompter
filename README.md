@@ -309,6 +309,51 @@ jsonresponse:
 | **Variants Support** | No | No | Yes (within one template) |
 | **Empty Result Handling** | Error | Error | OK (saves empty, continues) |
 
+## Prompt Pre-processing (`$$segment=prepare`)
+
+Templates support an optional `prepare` segment for transforming the user and system messages **before** they are sent to the LLM — but **after** all placeholder replacements (`{{payload}}`, `{{json}}`) have been applied.
+
+The segment body is treated as a JavaScript function body with one parameter `env`:
+- `env.system` (string | undefined) — the system message after replacements
+- `env.user` (string) — the user message after replacements
+
+The function must return an object with the same shape `{ system?: string, user: string }`. If the function throws an error, the prompt is treated as invalid.
+
+Works in both **Template** and **JSON Pipeline** modes. Applied once per prompt step (not accumulated across pipeline steps).
+
+**Example — trim whitespace from user message:**
+```
+$$begin
+$$system
+You are a helpful assistant
+$$user
+Analyze: {{payload}}
+$$segment=prepare
+return { system: env.system, user: env.user.trim() }
+$$end
+```
+
+**Example — inject dynamic context into system message:**
+```
+$$begin
+$$system
+You are an expert. Context length: {{placeholder}}
+$$user
+Summarize: {{payload}}
+$$segment=prepare
+return { system: `You are an expert. Context length: ${env.user.length}`, user: env.user }
+$$end
+```
+
+**Rules:**
+- Optional — if absent, messages are sent as-is after replacements
+- Input parameter: `env` (object) with `env.system` (string | undefined) and `env.user` (string)
+- Must return `{ system?: string, user: string }` — the modified messages
+- If the function throws — the prompt is treated as an error
+- Works in Template and JSON Pipeline modes
+
+---
+
 ## Response Conversion (`$$segment=convert`, `$$segment=convert_shared`)
 
 Templates support optional segments for transforming or validating AI responses using custom JavaScript code.
